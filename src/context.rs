@@ -2,10 +2,12 @@
 // See the COPYRIGHT file at the top-level directory of this distribution.
 // Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
 
+#[cfg(feature = "glib")]
 use glib::translate::*;
 use c_vec::CVec;
 use std::mem::transmute;
 use libc::{c_double, c_int};
+use std::ffi::CString;
 use ::paths::Path;
 use ::fonts::{TextExtents, TextCluster, FontExtents, ScaledFont, FontOptions, FontFace, Glyph};
 use ::matrices::{Matrix, MatrixTrait};
@@ -41,6 +43,7 @@ impl Drop for RectangleVec {
 
 pub struct Context(*mut cairo_t);
 
+#[cfg(feature = "glib")]
 impl<'a> ToGlibPtr<'a, *mut ffi::cairo_t> for &'a Context {
     type Storage = &'a Context;
 
@@ -50,18 +53,16 @@ impl<'a> ToGlibPtr<'a, *mut ffi::cairo_t> for &'a Context {
     }
 }
 
+#[cfg(feature = "glib")]
 impl FromGlibPtr<*mut ffi::cairo_t> for Context {
     #[inline]
     unsafe fn from_glib_none(ptr: *mut ffi::cairo_t) -> Context {
-        assert!(!ptr.is_null());
-        ffi::cairo_reference(ptr);
-        Context(ptr)
+        Self::from_raw_none(ptr)
     }
 
     #[inline]
     unsafe fn from_glib_full(ptr: *mut ffi::cairo_t) -> Context {
-        assert!(!ptr.is_null());
-        Context(ptr)
+        Self::from_raw_full(ptr)
     }
 }
 
@@ -73,7 +74,7 @@ impl AsRef<Context> for Context {
 
 impl Clone for Context {
     fn clone(&self) -> Context {
-        unsafe { from_glib_none(self.to_glib_none().0) }
+        unsafe { Self::from_raw_none(self.0) }
     }
 }
 
@@ -84,13 +85,26 @@ impl Drop for Context {
 }
 
 impl Context {
+    #[inline]
+    unsafe fn from_raw_none(ptr: *mut ffi::cairo_t) -> Context {
+        assert!(!ptr.is_null());
+        ffi::cairo_reference(ptr);
+        Context(ptr)
+    }
+
+    #[inline]
+    unsafe fn from_raw_full(ptr: *mut ffi::cairo_t) -> Context {
+        assert!(!ptr.is_null());
+        Context(ptr)
+    }
+
     pub fn ensure_status(&self) {
         self.status().ensure_valid();
     }
 
     pub fn new<T: AsRef<Surface>>(target: &T) -> Context {
         unsafe {
-            from_glib_full(ffi::cairo_create(target.as_ref().to_glib_none().0))
+            Self::from_raw_full(ffi::cairo_create(target.as_ref().to_raw_none()))
         }
     }
 
@@ -116,7 +130,7 @@ impl Context {
 
     pub fn get_target(&self) -> Surface {
         unsafe {
-            from_glib_none(ffi::cairo_get_target(self.0))
+            Surface::from_raw_none(ffi::cairo_get_target(self.0))
         }
     }
 
@@ -147,7 +161,7 @@ impl Context {
 
     pub fn get_group_target(&self) -> Surface {
         unsafe {
-            from_glib_none(ffi::cairo_get_group_target(self.0))
+            Surface::from_raw_none(ffi::cairo_get_group_target(self.0))
         }
     }
 
@@ -177,7 +191,7 @@ impl Context {
     }
 
     pub fn set_source_surface<T: AsRef<Surface>>(&self, surface: &T, x: f64, y: f64) {
-        unsafe { ffi::cairo_set_source_surface(self.0, surface.as_ref().to_glib_none().0, x, y); }
+        unsafe { ffi::cairo_set_source_surface(self.0, surface.as_ref().to_raw_none(), x, y); }
     }
 
     pub fn set_antialias(&self, antialias : Antialias) {
@@ -573,7 +587,7 @@ impl Context {
 
     pub fn select_font_face(&self, family: &str, slant: FontSlant, weight: FontWeight) {
         unsafe {
-            ffi::cairo_select_font_face(self.0, family.to_glib_none().0, slant, weight)
+            ffi::cairo_select_font_face(self.0, CString::new(family).unwrap().as_ptr(), slant, weight)
         }
     }
 
@@ -638,7 +652,7 @@ impl Context {
 
     pub fn show_text(&self, text: &str) {
         unsafe {
-            ffi::cairo_show_text(self.0, text.to_glib_none().0)
+            ffi::cairo_show_text(self.0, CString::new(text).unwrap().as_ptr())
         }
     }
 
@@ -655,7 +669,7 @@ impl Context {
                             cluster_flags: TextClusterFlags) {
         unsafe {
             ffi::cairo_show_text_glyphs(self.0,
-                                        text.to_glib_none().0,
+                                        CString::new(text).unwrap().as_ptr(),
                                         -1 as c_int, //NULL terminated
                                         glyphs.as_ptr(),
                                         glyphs.len() as c_int,
@@ -692,7 +706,7 @@ impl Context {
         };
 
         unsafe {
-            ffi::cairo_text_extents(self.0, text.to_glib_none().0, &mut extents);
+            ffi::cairo_text_extents(self.0, CString::new(text).unwrap().as_ptr(), &mut extents);
         }
         extents
     }
@@ -805,7 +819,7 @@ impl Context {
 
     pub fn text_path(&self, str_: &str) {
         unsafe {
-            ffi::cairo_text_path(self.0, str_.to_glib_none().0)
+            ffi::cairo_text_path(self.0, CString::new(str_).unwrap().as_ptr())
         }
     }
 

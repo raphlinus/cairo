@@ -5,6 +5,7 @@
 use std::mem;
 use libc::c_void;
 
+#[cfg(feature = "glib")]
 use glib::translate::*;
 use ffi;
 use ffi::enums::{
@@ -17,36 +18,53 @@ use ffi::enums::{
 pub struct Surface(*mut ffi::cairo_surface_t);
 
 impl Surface {
-    pub fn status(&self) -> Status {
-        unsafe { ffi::cairo_surface_status(self.to_glib_none().0) }
-    }
-
-    pub fn create_similar(&self, content: Content, width: i32, height: i32) -> Surface {
-        unsafe { from_glib_full(ffi::cairo_surface_create_similar(self.to_glib_none().0, content, width, height)) }
-    }
-}
-
-impl<'a> ToGlibPtr<'a, *mut ffi::cairo_surface_t> for Surface {
-    type Storage = &'a Surface;
-
-    #[inline]
-    fn to_glib_none(&'a self) -> Stash<'a, *mut ffi::cairo_surface_t, Self> {
-        Stash(self.0, self)
-    }
-}
-
-impl FromGlibPtr<*mut ffi::cairo_surface_t> for Surface {
-    #[inline]
-    unsafe fn from_glib_none(ptr: *mut ffi::cairo_surface_t) -> Surface {
+    #[doc(hidden)]
+    pub unsafe fn from_raw_none(ptr: *mut ffi::cairo_surface_t) -> Surface {
         assert!(!ptr.is_null());
         ffi::cairo_surface_reference(ptr);
         Surface(ptr)
     }
 
-    #[inline]
-    unsafe fn from_glib_full(ptr: *mut ffi::cairo_surface_t) -> Surface {
+    #[doc(hidden)]
+    pub unsafe fn from_raw_full(ptr: *mut ffi::cairo_surface_t) -> Surface {
         assert!(!ptr.is_null());
         Surface(ptr)
+    }
+
+    #[doc(hidden)]
+    pub fn to_raw_none(&self) -> *mut ffi::cairo_surface_t {
+        self.0
+    }
+
+    pub fn status(&self) -> Status {
+        unsafe { ffi::cairo_surface_status(self.0) }
+    }
+
+    pub fn create_similar(&self, content: Content, width: i32, height: i32) -> Surface {
+        unsafe { Self::from_raw_full(ffi::cairo_surface_create_similar(self.0, content, width, height)) }
+    }
+}
+
+#[cfg(feature = "glib")]
+impl<'a> ToGlibPtr<'a, *mut ffi::cairo_surface_t> for Surface {
+    type Storage = &'a Surface;
+
+    #[inline]
+    fn to_glib_none(&'a self) -> Stash<'a, *mut ffi::cairo_surface_t, Self> {
+        Stash(self.to_raw_none(), self)
+    }
+}
+
+#[cfg(feature = "glib")]
+impl FromGlibPtr<*mut ffi::cairo_surface_t> for Surface {
+    #[inline]
+    unsafe fn from_glib_none(ptr: *mut ffi::cairo_surface_t) -> Surface {
+        Self::from_raw_none(ptr)
+    }
+
+    #[inline]
+    unsafe fn from_glib_full(ptr: *mut ffi::cairo_surface_t) -> Surface {
+        Self::from_raw_full(ptr)
     }
 }
 
@@ -58,7 +76,7 @@ impl AsRef<Surface> for Surface {
 
 impl Clone for Surface {
     fn clone(&self) -> Surface {
-        unsafe { from_glib_none(self.to_glib_none().0) }
+        unsafe { Self::from_raw_none(self.0) }
     }
 }
 
